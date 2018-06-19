@@ -124,7 +124,7 @@ INCLUDES+= -I$(ADF_DIR)/include           \
            -I$(ADF_PLATFORM_DIR)/include  \
            -I$(ADF_CTL_DIR)/include
 
-CFLAGS = -D_GNU_SOURCE -O2 $(INCLUDES)
+CFLAGS += -D_GNU_SOURCE -O2 $(INCLUDES)
 #needed by SAL
 EXTRA_CFLAGS += -fPIC
 #include your $(ICP_OS)_$(ICP_OS_LEVEL).mk file
