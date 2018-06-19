@@ -68,11 +68,11 @@
 INSTALL_DEFAULT="$PWD"
 BUILD_OUTPUT_DEFAULT="build"
 ICP_TOOLS_TARGET="accelcomp"
-KERNEL_SOURCE_ROOT_DEFAULT="/usr/src/kernels/`\uname -r`"
+KERNEL_SOURCE_ROOT_DEFAULT="/lib/mudules/`\uname -r`/build"
 KERNEL_CONFIG="$KERNEL_SOURCE_ROOT_DEFAULT/.config"
 OS="`\uname -m`"
 ORIG_UMASK=`umask`
-MODULE_DIR="/lib/modules/`\uname -r`/kernel/drivers"
+MODULE_DIR="/lib/modules/`\uname -r`/kernel/drivers/crypto"
 OBJ_LIST="icp_qa_al.ko"
 VF_OBJ_LIST="icp_qa_al_vf.ko"
 BIN_LIST="mof_firmware.bin mmp_firmware.bin
@@ -358,7 +358,7 @@ BuildAccelSample()
     fi
     cp $ICP_ROOT/quickassist/lookaside/access_layer/src/sample_code/performance/compression/calgary /lib/firmware/
     cp $ICP_ROOT/quickassist/lookaside/access_layer/src/sample_code/performance/compression/calgary32 /lib/firmware/
-  	cp $ICP_ROOT/quickassist/lookaside/access_layer/src/sample_code/performance/compression/canterbury /lib/firmware/
+    cp $ICP_ROOT/quickassist/lookaside/access_layer/src/sample_code/performance/compression/canterbury /lib/firmware/
 
     make perf_all
     InstallerOperationStatus=$?
@@ -602,9 +602,10 @@ InstallAccel()
             install -D -m 750 icp_gige_watchdog /etc/init.d
         fi
     fi
-    install -D -m 750 qat_service /etc/init.d
-    install -D -m 750 adf_ctl /etc/init.d
-    
+
+    install -D -m 0644 quickassist.service /lib/systemd/system
+    install -D -m 0755 adf_ctl /sbin
+
     if [ $OS == "x86_64" ]; then
         if [ -d /lib64 ]; then
             libDir="/lib64"
@@ -616,11 +617,11 @@ InstallAccel()
         cp libicp_qa_al_vf_s.so $libDir
         echo "Copying libicp_qa_al_vf.a to $libDir"
         cp libicp_qa_al_vf.a $libDir
-        ln -sf $libDir/libicp_qa_al_vf_s.so $libDir/libicp_qa_al_s.so 
+        ln -sf $libDir/libicp_qa_al_vf_s.so $libDir/libicp_qa_al_s.so
         ln -sf $libDir/libicp_qa_al_vf.a $libDir/libicp_qa_al.a
     else
         echo "Copying libicp_qa_al_s.so to $libDir"
-        cp libicp_qa_al_s.so $libDir 
+        cp libicp_qa_al_s.so $libDir
         echo "Copying libicp_qa_al.a to $libDir"
         cp libicp_qa_al.a $libDir
     fi
@@ -636,9 +637,16 @@ InstallAccel()
     fi
 
     if [ $numC2xxxDevice != "0" ]; then
-        echo 'KERNEL=="icp_adf_ctl" MODE="0600"' > /etc/udev/rules.d/00-c2xxx_qa.rules
-        echo 'KERNEL=="icp_dev[0-9]*" MODE="0600"' >> /etc/udev/rules.d/00-c2xxx_qa.rules
-        echo 'KERNEL=="icp_dev_mem?" MODE="0600"' >> /etc/udev/rules.d/00-c2xxx_qa.rules
+	echo "sha256" > /etc/modules-load.d/quickassist.conf
+	echo "sha512" >> /etc/modules-load.d/quickassist.conf
+	echo "icp_qa_al" >> /etc/modules-load.d/quickassist.conf
+
+	echo 'KERNEL=="icp_adf_ctl" MODE="0600"' > /lib/udev/rules.d/80-c2xxx_qa.rules
+	echo 'KERNEL=="icp_dev[0-9]*" MODE="0600"' >> /lib/udev/rules.d/80-c2xxx_qa.rules
+	echo 'KERNEL=="icp_dev_mem?" MODE="0600"' >> /lib/udev/rules.d/80-c2xxx_qa.rules
+
+	udevadm control --reload-rules
+	udevadm trigger
     fi
 
     if [ -e /sbin/chkconfig ] ; then
@@ -648,6 +656,9 @@ InstallAccel()
                 chkconfig --add gige_watchdog_service
             fi
         fi
+    elif [ -e /bin/systemctl ]; then
+	systemctl daemon-reload
+	systemctl enable quickassist
     elif [ -e /usr/sbin/update-rc.d ]; then
         update-rc.d qat_service defaults
         if [ "$numDh89xxDevice" -ne "0" ]; then
@@ -659,13 +670,26 @@ InstallAccel()
         echo "\n\t***Failed to add qat_service to start-up***>"
         return 1
     fi
+
     echo "Starting QAT service"
-    /etc/init.d/qat_service start
+
+    if [ -e /bin/systemctl ]; then
+	systemctl start quickassist
+    else
+    	/etc/init.d/qat_service start
+    fi
+
     if [ $USE_WATCHDOG == true ]; then
         echo "Starting GigE watchdog service"
         /etc/init.d/gige_watchdog_service start
     fi
-    /etc/init.d/qat_service status
+
+    if [ -e /bin/systemctl ]; then
+    	systemctl status quickassist
+    else
+    	/etc/init.d/qat_service status
+    fi
+
     return 0
 }
 
@@ -703,6 +727,10 @@ UninstallAccel()
         /bin/rm -f /etc/init.d/qat_service
         /bin/rm -f /etc/init.d/adf_ctl
 
+    elif [ -e /lib/systemd/system/quickassist.service ]; then
+	systemctl stop quickassist
+	/bin/rm -f /lib/systemd/system/quickassist.service
+	/bin/rm -f /sbin/adf_ctl
     fi
 
     echo "Removing the QAT firmware"
@@ -731,6 +759,8 @@ UninstallAccel()
     echo "Removing device permissions rules"
     rm -f /etc/udev/rules.d/00-dh89xxcc_qa.rules
     rm -f /etc/udev/rules.d/00-c2xxx_qa.rules
+    rm -f /lib/udev/rules.d/80-c2xxx_qa.rules
+    rm -f /etc/modules-load.d/quickassist.conf
     echo "Rebuilding the module.dep file, this will take a few moments"
     /sbin/depmod -a
     rm -f /lib/libicp_qa_al_s.so
