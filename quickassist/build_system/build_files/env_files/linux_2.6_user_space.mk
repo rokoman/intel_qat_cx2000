@@ -87,6 +87,7 @@ INCLUDES+= \
 
 EXTRA_CFLAGS += $(cmd_line_cflags)
 EXTRA_CFLAGS += -fno-strict-aliasing
+EXTRA_CFLAGS += $(INCLUDES)
 EXTRA_LDFLAGS +=-whole-archive
 
 ifeq ($(ARCH), i386)
