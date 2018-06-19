@@ -41,7 +41,7 @@
 
 #include <stdarg.h>
 #include <stdio.h>
-#ifdef __linux__
+#if defined(__linux__) && defined(__GLIBC__)
 #include <bits/time.h>
 #endif
 #include <sched.h>
