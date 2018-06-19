@@ -59,6 +59,8 @@
 #  version: QAT1.5.L.1.11.0-36
 ################################################################
 
+export KERNEL_SOURCE_ROOT=/lib/modules/$(shell uname -r)/build
+
 PATH_TO_FILE=/lib64 /lib /lib64/* /lib/* /usr /usr/*
 KERNEL_HEADER_FILE_LIST=$(sort $(shell cat $(ICP_BUILD_OUTPUT)/kernel_header_file_list.txt))
 KERNEL_HEADER_FILE_PATH=$(strip $(KERNEL_SOURCE_ROOT))/include/linux 
@@ -124,8 +126,7 @@ kernel: lac_lib_dir libosal hal adf lac qat-fw install_scripts
 
 install_scripts:
 	@echo ; echo 'Copying Install Scripts';
-	@cp $(ICP_BUILDSYSTEM_PATH)/build_files/qat_service $(ICP_BUILD_OUTPUT)/;
-	@chmod 750 $(ICP_BUILD_OUTPUT)/qat_service;
+	@cp $(ICP_BUILDSYSTEM_PATH)/build_files/quickassist.service $(ICP_BUILD_OUTPUT)/;
 	@cp $(CONFIG_PATH)/dh89xxcc_qa_dev0.conf $(ICP_BUILD_OUTPUT)/;
 	@cp $(CONFIG_PATH)/dh89xxcc_qa_dev1.conf $(ICP_BUILD_OUTPUT)/;
 	@cp $(CONFIG_PATH)/dh89xxcc_qa_dev0_single_accel.conf $(ICP_BUILD_OUTPUT)/;
@@ -260,6 +261,10 @@ clean:
 	@echo ; echo 'Cleaning Binaries in Output Dir';
 	@rm -rf $(ICP_BUILD_OUTPUT);
 	@rm -rf $(LAC_LIB_DIR);
+	@cd $(ICP_ROOT);
+	@find -type f -name "*.cmd" | xargs rm -f
+	@find -type f -name "*.o" | xargs rm -f
+	@find -type f -name "Module.symvers" | xargs rm -f
 	@echo 'Cleaning done';
 
 clean_ci:
